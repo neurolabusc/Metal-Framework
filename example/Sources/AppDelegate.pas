@@ -70,7 +70,7 @@ end;
 procedure TAppController.copyScreen (sender: id);
 begin
 	writeln('copying screen to clipboard');
-	MTLWriteTextureToClipboard;
+	MTLWriteTextureToClipboard(true);
 end;
 
 procedure TAppController.newDocument (sender: id);

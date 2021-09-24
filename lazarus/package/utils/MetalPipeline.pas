@@ -6,6 +6,7 @@ unit MetalPipeline;
 interface
 uses
 	MetalUtils, Metal, MetalKit, CocoaAll, SysUtils,
+        {$DEFINE COCOA_1010}
 	{$ifndef COCOA_1010}
 	// pre-10.10 FPC RTL CocoaAll.pas doesn't use MacOSAll types!
 	// if you're using a compiler which supports the 10.10 headers
@@ -21,7 +22,7 @@ type
 			lib: MTLLibraryProtocol;
 			functions: NSMutableDictionary;
 		public
-			function GetFunction(name: string): MTLFunctionProtocol;
+			function GetFunction (name: string): MTLFunctionProtocol;
 			destructor Destroy; override;
 	end;
 
@@ -59,26 +60,27 @@ type
 			procedure SetColorPixelFormat(pixelFormat: MTLPixelFormat);
 			procedure MakeCurrent;
 			procedure Draw;
-			
+
 			destructor Destroy; override;
 	end;
 
 type
-	TMetalLibraryOptions = class
+	TMetalLibraryOptions = record
 		public
 			name: string;													// path to compiled .metallib file OR .metal file which will be compiled at runtime
 			preprocessorMacros: NSDictionary;			// A list of preprocessor macros to apply when compiling the library source.
-																						// The macros are specified as key/value pairs, using an NSDictionary. 
+																						// The macros are specified as key/value pairs, using an NSDictionary.
 																						// The keys must be NSString objects, and the values can be either NSString or NSNumber objects.
-			fastMathEnabled: boolean;							// A Boolean value that indicates whether the compiler can perform optimizations for 
+			fastMathEnabled: boolean;							// A Boolean value that indicates whether the compiler can perform optimizations for
 																						// floating-point arithmetic that may violate the IEEE 754 standard.
 			languageVersion: MTLLanguageVersion;	// The language version used to interpret the library source code.
 		public
-			constructor Create (_name: string = '');
+			class function Default: TMetalLibraryOptions; static;
+			constructor Create (_name: string);
 	end;
 
 type
-	TMetalPipelineOptions = class
+	TMetalPipelineOptions = record
 		public
 			libraryName: string;					// path to compiled .metallib file
 			shaderLibrary: TMetalLibrary;	// metal library to locate shader functions
@@ -89,78 +91,85 @@ type
 			vertexDescriptor: MTLVertexDescriptor;
 			pipelineDescriptor: MTLRenderPipelineDescriptor;
 		public
-			constructor Create;
+			class function Default: TMetalPipelineOptions; static;
 	end;
 
 { Drawing }
-procedure MTLDraw(primitiveType: MTLPrimitiveType; vertexStart: NSUInteger; vertexCount: NSUInteger);
-procedure MTLDrawIndexed(primitiveType: MTLPrimitiveType; indexCount: NSUInteger; indexType: MTLIndexType; indexBuffer: MTLBufferProtocol; indexBufferOffset: NSUInteger);
+procedure MTLDraw (primitiveType: MTLPrimitiveType; vertexStart: NSUInteger; vertexCount: NSUInteger);
+procedure MTLDrawIndexed (primitiveType: MTLPrimitiveType; indexCount: NSUInteger; indexType: MTLIndexType; indexBuffer: MTLBufferProtocol; indexBufferOffset: NSUInteger);
 
 { Vertex Buffers }
-procedure MTLSetVertexBuffer(buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger); overload;
-procedure MTLSetVertexBuffer(buffer: MTLBufferProtocol; index: NSUInteger); overload; inline;
-procedure MTLSetVertexBytes(bytes: pointer; len: NSUInteger; index: NSUInteger);
+procedure MTLSetVertexBuffer (buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger); overload;
+procedure MTLSetVertexBuffer (buffer: MTLBufferProtocol; index: NSUInteger); overload; inline;
+procedure MTLSetVertexBytes (bytes: pointer; len: NSUInteger; index: NSUInteger);
 
-procedure MTLSetFragmentBuffer(buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
-procedure MTLSetFragmentBytes(bytes: pointer; len: NSUInteger; index: NSUInteger);
+procedure MTLSetFragmentBuffer (buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
+procedure MTLSetFragmentBytes (bytes: pointer; len: NSUInteger; index: NSUInteger);
 
 { Textures }
-function MTLNewTexture(width, height: integer; textureType: MTLTextureType; pixelFormat: MTLPixelFormat; usage: MTLTextureUsage): MTLTextureProtocol; overload;
-function MTLNewTexture(desc: MTLTextureDescriptor): MTLTextureProtocol; overload;
+function MTLNewTexture (width, height: integer; textureType: MTLTextureType; pixelFormat: MTLPixelFormat; usage: MTLTextureUsage): MTLTextureProtocol; overload;
+function MTLNewTexture (desc: MTLTextureDescriptor): MTLTextureProtocol; overload;
 
-function MTLLoadTexture(path: string): MTLTextureProtocol;
-function MTLLoadTexture(	bytes: pointer; 
-													width, height: integer; textureType: MTLTextureType = MTLTextureType2D; 
-													pixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm; 
+function MTLLoadTexture (path: string): MTLTextureProtocol;
+function MTLLoadTexture (	bytes: pointer;
+													width, height: integer; textureType: MTLTextureType = MTLTextureType2D;
+													pixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm;
 													bytesPerComponent: integer = 4;
 													usage: MTLTextureUsage = MTLTextureUsageShaderRead
 													): MTLTextureProtocol;
 
 function MTLCopyLastFrameTexture(texture: MTLTextureProtocol; hasAlpha: boolean = true): CGImageRef;
+function MTLCurrentDrawableTextureWidth: integer;
+function MTLReadPixel(texture: MTLTextureProtocol; x, y: integer): UInt32; overload;
+function MTLReadPixel(x, y: integer): UInt32; overload;
+
+//function MTLReadDepth(texture: MTLTextureProtocol; x, y: integer): single; overload;
+function MTLReadDepth(x, y: integer): single; overload;
+
 procedure MTLWriteTextureToFile(texture: MTLTextureProtocol; path: pchar; hasAlpha: boolean = true; fileType: NSBitmapImageFileType = NSPNGFileType; imageProps: NSDictionary = nil); overload;
 procedure MTLWriteTextureToFile(path: pchar; hasAlpha: boolean = true; fileType: NSBitmapImageFileType = NSPNGFileType; imageProps: NSDictionary = nil); overload;
-procedure MTLWriteTextureToClipboard(texture: MTLTextureProtocol; hasAlpha: boolean = true); overload;
+procedure MTLWriteTextureToClipboard(texture: MTLTextureProtocol = nil; hasAlpha: boolean = true); overload;
 procedure MTLWriteTextureToClipboard(hasAlpha: boolean = true); overload;
 
 { Buffers }
-function MTLNewBuffer(bytes: pointer; len: NSUInteger; options: MTLResourceOptions = MTLResourceCPUCacheModeDefaultCache): MTLBufferProtocol; overload;
-function MTLNewBuffer(len: NSUInteger; options: MTLResourceOptions = MTLResourceCPUCacheModeDefaultCache): MTLBufferProtocol; overload;
+function MTLNewBuffer (bytes: pointer; len: NSUInteger; options: MTLResourceOptions = MTLResourceCPUCacheModeDefaultCache): MTLBufferProtocol; overload;
+function MTLNewBuffer (len: NSUInteger; options: MTLResourceOptions = MTLResourceCPUCacheModeDefaultCache): MTLBufferProtocol; overload;
 
 { Rendering }
-procedure MTLBeginFrame(pipeline: TMetalPipeline = nil); inline;
-procedure MTLEndFrame; inline;
+procedure MTLBeginFrame (pipeline: TMetalPipeline = nil); inline;
+procedure MTLEndFrame (waitUntilCompleted: boolean = false); inline;
 
-procedure MTLSetShader(pipeline: TMetalPipeline);
+procedure MTLSetShader (pipeline: TMetalPipeline);
 
-procedure MTLSetFragmentTexture(texture: MTLTextureProtocol; index: NSUInteger);
-procedure MTLSetViewPort(constref viewport: MTLViewport);
-procedure MTLSetCullMode(mode: MTLCullMode);
-procedure MTLSetFrontFacingWinding(winding: MTLWinding);
+procedure MTLSetFragmentTexture (texture: MTLTextureProtocol; index: NSUInteger);
+procedure MTLSetViewPort (constref viewport: MTLViewport);
+procedure MTLSetCullMode (mode: MTLCullMode);
+procedure MTLSetFrontFacingWinding (winding: MTLWinding);
 
 { Compute }
 procedure MTLBeginCommand;
-procedure MTLEndCommand(waitUntilCompleted: boolean = false);
-procedure MTLBeginEncoding(pipeline: TMetalPipeline; renderPassDescriptor: MTLRenderPassDescriptor = nil);
+procedure MTLEndCommand (waitUntilCompleted: boolean = false);
+procedure MTLBeginEncoding (pipeline: TMetalPipeline; renderPassDescriptor: MTLRenderPassDescriptor = nil);
 procedure MTLEndEncoding;
 
-procedure MTLSetBytes(bytes: pointer; len: NSUInteger; index: NSUInteger);
-procedure MTLSetBuffer(buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger); overload;
-procedure MTLSetBuffer(offset: NSUInteger; index: NSUInteger); overload;
-procedure MTLSetBuffers(buffers: MTLBufferProtocol; offsets: NSUIntegerPtr; range: NSRange);
-procedure MTLSetTexture(texture: MTLTextureProtocol; index: NSUInteger);
-procedure MTLSetTextures(textures: MTLTextureProtocol; range: NSRange);
-procedure MTLSetDispatchThreadgroups(threadgroupsPerGrid: MTLSize; threadsPerThreadgroup: MTLSize);
+procedure MTLSetBytes (bytes: pointer; len: NSUInteger; index: NSUInteger);
+procedure MTLSetBuffer (buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger); overload;
+procedure MTLSetBuffer (offset: NSUInteger; index: NSUInteger); overload;
+procedure MTLSetBuffers (buffers: MTLBufferProtocol; offsets: NSUIntegerPtr; range: NSRange);
+procedure MTLSetTexture (texture: MTLTextureProtocol; index: NSUInteger);
+procedure MTLSetTextures (textures: MTLTextureProtocol; range: NSRange);
+procedure MTLSetDispatchThreadgroups (threadgroupsPerGrid: MTLSize; threadsPerThreadgroup: MTLSize);
 
 { Context }
-procedure MTLSetClearColor(clearColor: MTLClearColor; colorPixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm; depthStencilPixelFormat: MTLPixelFormat = MTLPixelFormatDepth32Float);
-procedure MTLSetDepthStencil(pipeline: TMetalPipeline; compareFunction: MTLCompareFunction = MTLCompareFunctionAlways; depthWriteEnabled: boolean = false; frontFaceStencil: MTLStencilDescriptor = nil; backFaceStencil: MTLStencilDescriptor = nil);
+procedure MTLSetClearColor (clearColor: MTLClearColor; colorPixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm; depthStencilPixelFormat: MTLPixelFormat = MTLPixelFormatDepth32Float);
+procedure MTLSetDepthStencil (pipeline: TMetalPipeline; compareFunction: MTLCompareFunction = MTLCompareFunctionAlways; depthWriteEnabled: boolean = false; frontFaceStencil: MTLStencilDescriptor = nil; backFaceStencil: MTLStencilDescriptor = nil);
 
 { Creation }
-function MTLCreateContext(view: MTKView): TMetalContext;
-function MTLCreateLibrary(options: TMetalLibraryOptions): TMetalLibrary;
-function MTLCreatePipeline(options: TMetalPipelineOptions): TMetalPipeline;
+function MTLCreateContext (view: MTKView): TMetalContext;
+function MTLCreateLibrary (options: TMetalLibraryOptions): TMetalLibrary;
+function MTLCreatePipeline (options: TMetalPipelineOptions): TMetalPipeline;
 
-procedure MTLMakeContextCurrent(context: TMetalContext);
+procedure MTLMakeContextCurrent (context: TMetalContext);
 
 function MTLCreatePipelineDescriptor: MTLRenderPipelineDescriptor;
 
@@ -176,8 +185,6 @@ type
 	end;
 
 implementation
-uses
-	Variants;
 
 const
 	kError_InvalidContext = 'no current context';
@@ -188,7 +195,7 @@ threadvar
 	CurrentThreadContext: TMetalContext;
 
 {=============================================}
-{@! ___UTILS___ } 
+{@! ___UTILS___ }
 {=============================================}
 
 function NSSTR(str: string): NSString; overload;
@@ -225,29 +232,37 @@ begin
 end;
 
 {=============================================}
-{@! ___METAL LIBRARY OPTIONS___ } 
+{@! ___METAL LIBRARY OPTIONS___ }
 {=============================================}
 
 constructor TMetalLibraryOptions.Create (_name: string);
 begin
-	name := _name;
-	preprocessorMacros := nil;
-	fastMathEnabled := true;
+        //preprocessorMacros := nil;
+        //fastMathEnabled := true;
+        self := self.default;
+        name := _name;
 end;
 
-constructor TMetalPipelineOptions.Create;
+class function TMetalLibraryOptions.Default: TMetalLibraryOptions;
 begin
-	libraryName := '';
-	vertexShader := 'vertexShader';
-	fragmentShader := 'fragmentShader';
-	kernelFunction := '';
-	vertexDescriptor := nil;
-	shaderLibrary := nil;
-	pipelineDescriptor := nil;
+	result.name := '';
+	result.preprocessorMacros := nil;
+        result.fastMathEnabled := true;
+end;
+
+class function TMetalPipelineOptions.Default: TMetalPipelineOptions;
+begin
+	result.libraryName := '';
+	result.vertexShader := 'vertexShader';
+	result.fragmentShader := 'fragmentShader';
+	result.kernelFunction := '';
+	result.vertexDescriptor := nil;
+	result.shaderLibrary := nil;
+	result.pipelineDescriptor := nil;
 end;
 
 {=============================================}
-{@! ___METAL CONTEXT___ } 
+{@! ___METAL CONTEXT___ }
 {=============================================}
 
 class function TMetalContext.SharedContext: TMetalContext;
@@ -284,10 +299,10 @@ begin
 end;
 
 {=============================================}
-{@! ___METAL LIBRARY___ } 
+{@! ___METAL LIBRARY___ }
 {=============================================}
 
-function TMetalLibrary.GetFunction(name: string): MTLFunctionProtocol;
+function TMetalLibrary.GetFunction (name: string): MTLFunctionProtocol;
 var
 	func: MTLFunctionProtocol;
 begin
@@ -317,7 +332,7 @@ begin
 end;
 
 {=============================================}
-{@! ___METAL PIPELINE___ } 
+{@! ___METAL PIPELINE___ }
 {=============================================}
 
 destructor TMetalPipeline.Destroy;
@@ -330,7 +345,7 @@ begin
 	inherited;
 end;
 
-procedure FinalizeDrawing(pipeline: TMetalPipeline);
+procedure FinalizeDrawing (pipeline: TMetalPipeline);
 var
 	renderEncoder: MTLRenderCommandEncoderProtocol;
 begin
@@ -369,7 +384,7 @@ begin
 	end;
 end;
 
-procedure MTLDraw(primitiveType: MTLPrimitiveType; vertexStart: NSUInteger; vertexCount: NSUInteger);
+procedure MTLDraw (primitiveType: MTLPrimitiveType; vertexStart: NSUInteger; vertexCount: NSUInteger);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -379,7 +394,7 @@ begin
 	end;
 end;
 
-procedure MTLSetCullMode(mode: MTLCullMode);
+procedure MTLSetCullMode (mode: MTLCullMode);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -387,7 +402,7 @@ begin
 	end;
 end;
 
-procedure MTLSetFrontFacingWinding(winding: MTLWinding);
+procedure MTLSetFrontFacingWinding (winding: MTLWinding);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -395,7 +410,7 @@ begin
 	end;
 end;
 
-procedure MTLSetViewPort(constref viewport: MTLViewport);
+procedure MTLSetViewPort (constref viewport: MTLViewport);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -403,7 +418,7 @@ begin
 	end;
 end;
 
-procedure MTLSetFragmentTexture(texture: MTLTextureProtocol; index: NSUInteger);
+procedure MTLSetFragmentTexture (texture: MTLTextureProtocol; index: NSUInteger);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -411,7 +426,7 @@ begin
 	end;
 end;
 
-procedure MTLSetFragmentBuffer(buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
+procedure MTLSetFragmentBuffer (buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -419,7 +434,7 @@ begin
 	end;
 end;
 
-procedure MTLSetFragmentBytes(bytes: pointer; len: NSUInteger; index: NSUInteger);
+procedure MTLSetFragmentBytes (bytes: pointer; len: NSUInteger; index: NSUInteger);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -427,7 +442,7 @@ begin
 	end;
 end;
 
-procedure MTLSetVertexBuffer(buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
+procedure MTLSetVertexBuffer (buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -435,12 +450,12 @@ begin
 	end;
 end;
 
-procedure MTLSetVertexBuffer(buffer: MTLBufferProtocol; index: NSUInteger);
+procedure MTLSetVertexBuffer (buffer: MTLBufferProtocol; index: NSUInteger);
 begin
 	MTLSetVertexBuffer(buffer, 0, index);
 end;
 
-procedure MTLSetVertexBytes(bytes: pointer; len: NSUInteger; index: NSUInteger);
+procedure MTLSetVertexBytes (bytes: pointer; len: NSUInteger; index: NSUInteger);
 begin
 	ValidateRenderFrame;
 	with CurrentThreadContext do begin
@@ -448,19 +463,19 @@ begin
 	end;
 end;
 
-procedure MTLBeginFrame(pipeline: TMetalPipeline);
+procedure MTLBeginFrame (pipeline: TMetalPipeline);
 begin
 	MTLBeginCommand;
 	MTLBeginEncoding(pipeline);
 end;
 
-procedure MTLEndFrame;
+procedure MTLEndFrame (waitUntilCompleted: boolean = false);
 begin
 	MTLEndEncoding;
-	MTLEndCommand;
+	MTLEndCommand (waitUntilCompleted);
 end;
 
-procedure MTLBeginEncoding(pipeline: TMetalPipeline; renderPassDescriptor: MTLRenderPassDescriptor = nil);
+procedure MTLBeginEncoding (pipeline: TMetalPipeline; renderPassDescriptor: MTLRenderPassDescriptor = nil);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -481,7 +496,7 @@ begin
 	end;
 end;
 
-procedure MTLEndEncoding; 
+procedure MTLEndEncoding;
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -508,7 +523,7 @@ begin
 	end;
 end;
 
-procedure MTLEndCommand(waitUntilCompleted: boolean = false);
+procedure MTLEndCommand (waitUntilCompleted: boolean = false);
 begin
 	with CurrentThreadContext do begin
 	if kMetalContextFrameStateRender in frameState then
@@ -523,7 +538,7 @@ begin
 	end;
 end;
 
-procedure MTLSetBytes(bytes: pointer; len: NSUInteger; index: NSUInteger);
+procedure MTLSetBytes (bytes: pointer; len: NSUInteger; index: NSUInteger);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -531,7 +546,7 @@ begin
 	end;
 end;
 
-procedure MTLSetBuffer(buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
+procedure MTLSetBuffer (buffer: MTLBufferProtocol; offset: NSUInteger; index: NSUInteger);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -539,7 +554,7 @@ begin
 	end;
 end;
 
-procedure MTLSetBuffer(offset: NSUInteger; index: NSUInteger);
+procedure MTLSetBuffer (offset: NSUInteger; index: NSUInteger);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -547,7 +562,7 @@ begin
 	end;
 end;
 
-procedure MTLSetBuffers(buffers: MTLBufferProtocol; offsets: NSUIntegerPtr; range: NSRange);
+procedure MTLSetBuffers (buffers: MTLBufferProtocol; offsets: NSUIntegerPtr; range: NSRange);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -555,7 +570,7 @@ begin
 	end;
 end;
 
-procedure MTLSetTexture(texture: MTLTextureProtocol; index: NSUInteger);
+procedure MTLSetTexture (texture: MTLTextureProtocol; index: NSUInteger);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -563,7 +578,7 @@ begin
 	end;
 end;
 
-procedure MTLSetTextures(textures: MTLTextureProtocol; range: NSRange);
+procedure MTLSetTextures (textures: MTLTextureProtocol; range: NSRange);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -571,7 +586,7 @@ begin
 	end;
 end;
 
-procedure MTLSetDispatchThreadgroups(threadgroupsPerGrid: MTLSize; threadsPerThreadgroup: MTLSize);
+procedure MTLSetDispatchThreadgroups (threadgroupsPerGrid: MTLSize; threadsPerThreadgroup: MTLSize);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -579,7 +594,7 @@ begin
 	end;
 end;
 
-procedure MTLSetClearColor(clearColor: MTLClearColor; colorPixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm; depthStencilPixelFormat: MTLPixelFormat = MTLPixelFormatDepth32Float);
+procedure MTLSetClearColor (clearColor: MTLClearColor; colorPixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm; depthStencilPixelFormat: MTLPixelFormat = MTLPixelFormatDepth32Float);
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	with CurrentThreadContext do begin
@@ -589,7 +604,7 @@ begin
 	end;
 end;
 
-procedure MTLSetDepthStencil(pipeline: TMetalPipeline; compareFunction: MTLCompareFunction = MTLCompareFunctionAlways; depthWriteEnabled: boolean = false; frontFaceStencil: MTLStencilDescriptor = nil; backFaceStencil: MTLStencilDescriptor = nil);
+procedure MTLSetDepthStencil (pipeline: TMetalPipeline; compareFunction: MTLCompareFunction = MTLCompareFunctionAlways; depthWriteEnabled: boolean = false; frontFaceStencil: MTLStencilDescriptor = nil; backFaceStencil: MTLStencilDescriptor = nil);
 var
 	desc: MTLDepthStencilDescriptor;
 begin
@@ -622,7 +637,7 @@ begin
 	result := CurrentThreadContext.device.newBufferWithLength_options(len, options);
 end;
 
-function MTLLoadTexture(path: string): MTLTextureProtocol;
+function MTLLoadTexture (path: string): MTLTextureProtocol;
 var
 	error: NSError;
 	data: NSData;
@@ -640,9 +655,9 @@ begin
 	end;
 end;
 
-function MTLLoadTexture(	bytes: pointer; 
-													width, height: integer; textureType: MTLTextureType = MTLTextureType2D; 
-													pixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm; 
+function MTLLoadTexture (	bytes: pointer;
+													width, height: integer; textureType: MTLTextureType = MTLTextureType2D;
+													pixelFormat: MTLPixelFormat = MTLPixelFormatBGRA8Unorm;
 													bytesPerComponent: integer = 4;
 													usage: MTLTextureUsage = MTLTextureUsageShaderRead
 													): MTLTextureProtocol;
@@ -678,12 +693,12 @@ begin
 	result := texture;
 end;
 
-function MTLNewTexture(width, height: integer; textureType: MTLTextureType; pixelFormat: MTLPixelFormat; usage: MTLTextureUsage): MTLTextureProtocol;
+function MTLNewTexture (width, height: integer; textureType: MTLTextureType; pixelFormat: MTLPixelFormat; usage: MTLTextureUsage): MTLTextureProtocol;
 begin
 	result := MTLLoadTexture(nil, width, height, textureType, pixelFormat, 0, usage);
 end;
 
-function MTLNewTexture(desc: MTLTextureDescriptor): MTLTextureProtocol;
+function MTLNewTexture (desc: MTLTextureDescriptor): MTLTextureProtocol;
 begin
 	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
 	result :=  CurrentThreadContext.device.newTextureWithDescriptor(desc);
@@ -717,12 +732,12 @@ begin
 	// read bytes
 	width := texture.width;
 	height := texture.height;
-  bytesPerRow := texture.width * 4;
-	bytesCount := width * height * 4;
+  bytesPerRow := width * 4;
+  	bytesCount := width * height * 4;
 	bytes := GetMem(bytesCount);
 
 	// blit from last command buffer
-	with CurrentThreadContext do 
+	with CurrentThreadContext do
 	begin
 		commandBuffer := commandQueue.commandBuffer;
 		blitEncoder := commandBuffer.blitCommandEncoder;
@@ -756,7 +771,7 @@ begin
 
 	CFRelease(provider);
 	CFRelease(colorSpace);
-end; 
+end;
 
 procedure MTLWriteTextureToFile(texture: MTLTextureProtocol; path: pchar; hasAlpha: boolean; fileType: NSBitmapImageFileType; imageProps: NSDictionary);
 var
@@ -781,8 +796,118 @@ end;
 
 procedure MTLWriteTextureToClipboard(hasAlpha: boolean);
 begin
-	MTLWriteTextureToClipboard(nil, hasAlpha);
+     MTLWriteTextureToClipboard(nil, hasAlpha);
 end;
+
+function MTLReadPixel(texture: MTLTextureProtocol; x, y: integer): UInt32; overload;
+var
+  blitEncoder: MTLBlitCommandEncoderProtocol;
+begin
+  Fatal(CurrentThreadContext = nil, kError_InvalidContext);
+  Fatal(texture.pixelFormat <> MTLPixelFormatBGRA8Unorm, 'texture must be MTLPixelFormatBGRA8Unorm pixel format.');
+  // blit from last command buffer
+  with CurrentThreadContext do begin
+    commandBuffer := commandQueue.commandBuffer;
+    blitEncoder := commandBuffer.blitCommandEncoder;
+    view.draw;
+    blitEncoder.synchronizeResource(texture);
+    blitEncoder.endEncoding;
+    commandBuffer.waitUntilCompleted;
+  end;
+  with CurrentThreadContext do begin
+    commandBuffer := commandQueue.commandBuffer;
+    blitEncoder := commandBuffer.blitCommandEncoder;
+    view.draw;
+    blitEncoder.synchronizeResource(texture);
+    blitEncoder.endEncoding;
+    commandBuffer.waitUntilCompleted;
+  end;
+  texture.getBytes_bytesPerRow_fromRegion_mipmapLevel(@result, texture.width * 4, MTLRegionMake2D(X, Y, 1, 1), 0);
+end;
+
+function MTLCurrentDrawableTextureWidth: integer;
+begin
+	result := CurrentThreadContext.view.currentDrawable.texture.width;
+end;
+
+function MTLReadPixel( x, y: integer): UInt32;
+var
+  texture: MTLTextureProtocol;
+begin
+  Fatal(CurrentThreadContext = nil, kError_InvalidContext);
+  with CurrentThreadContext do begin
+    view.setFramebufferOnly(false);
+    texture := view.currentDrawable.texture;
+    view.setFramebufferOnly(true);
+  end;
+  result := MTLReadPixel(texture, x, y);
+
+end;
+
+function MTLReadDepth(x, y: integer): single; overload;
+var
+  blitEncoder: MTLBlitCommandEncoderProtocol;
+  tex: MTLTextureProtocol;
+  texDescriptor: MTLTextureDescriptor;
+  w, h: integer;
+begin
+  // https://metashapes.com/blog/reading-depth-buffer-metal-api/
+  Fatal(CurrentThreadContext = nil, kError_InvalidContext);
+  //Fatal(texture.pixelFormat <> MTLPixelFormatDepth32Float, 'depth texture must be MTLPixelFormatDepth32Float pixel format:'+inttostr(texture.pixelFormat));
+  with CurrentThreadContext do begin
+    if (view.depthStencilPixelFormat <> MTLPixelFormatDepth32Float) then
+        exit(123);
+    texDescriptor := MTLTextureDescriptor.alloc.init.autorelease;
+	texDescriptor.setTextureType(MTLTextureType2D);
+	texDescriptor.setPixelFormat(MTLPixelFormatDepth32Float);
+    w :=  view.currentDrawable.texture.width;
+    h := view.currentDrawable.texture.height;
+	texDescriptor.setWidth(w);
+	texDescriptor.setHeight(h);
+	texDescriptor.setUsage(MTLTextureUsageShaderRead);
+    tex:= device.newTextureWithDescriptor(texDescriptor);
+    view.currentRenderPassDescriptor.depthAttachment.setStoreAction(MTLStoreActionStore);
+    view.currentRenderPassDescriptor.depthAttachment.setLoadAction(MTLLoadActionClear);
+    //renderPass.depthAttachment.texture
+    //view.currentRenderPassDescriptor.depthAttachment.setTexture(tex);
+    commandBuffer := commandQueue.commandBuffer;
+    blitEncoder := commandBuffer.blitCommandEncoder;
+    view.draw;
+    blitEncoder.synchronizeResource(tex);
+    blitEncoder.endEncoding;
+    commandBuffer.waitUntilCompleted;
+    //again...
+    commandBuffer := commandQueue.commandBuffer;
+    blitEncoder := commandBuffer.blitCommandEncoder;
+    view.draw;
+    //blitEncoder.copyFromTexture(view.currentRenderPassDescriptor.depthAttachment.texture, 0, 0, MTLOriginMake(0, 0, 0), MTLSizeMake(w, h, 1), tex, 0, 0, MTLOriginMake(0, 0, 0));
+
+    blitEncoder.synchronizeResource(tex);
+    blitEncoder.endEncoding;
+    commandBuffer.waitUntilCompleted;
+    //read data
+    tex.getBytes_bytesPerRow_fromRegion_mipmapLevel(@result, w * 4 , MTLRegionMake2D(X, Y, 1, 1), 0);
+
+  end;
+end;
+
+(*function MTLReadDepth( x, y: integer): single;
+var
+  texture: MTLTextureProtocol;
+begin
+  Fatal(CurrentThreadContext = nil, kError_InvalidContext);
+  with CurrentThreadContext do begin
+    view.setFramebufferOnly(false);
+    if (view.depthStencilPixelFormat <> MTLPixelFormatDepth32Float) then
+        exit(0);
+    texture := view.depthStencilTexture;
+    if (texture = nil) then
+        exit(0.0);
+    view.setFramebufferOnly(true);
+  end;
+  //texture.getBytes_bytesPerRow_fromRegion_mipmapLevel(@result, texture.width * 4, MTLRegionMake2D(X, Y, 1, 1), 0);
+  result := MTLReadDepth(texture, x, y);
+end; *)
 
 procedure MTLWriteTextureToClipboard(texture: MTLTextureProtocol; hasAlpha: boolean);
 var
@@ -804,22 +929,22 @@ begin
 	if imageRef <> nil then
 		begin
 			finalImage := NSImage.alloc.initWithCGImage_size(imageRef, NSMakeSize(CGImageGetWidth(imageRef), CGImageGetHeight(imageRef)));
-			
+
 			pb := NSPasteboard.generalPasteboard;
 			pb.clearContents;
 			pb.writeObjects(NSArray.arrayWithObject(finalImage));
-			
+
 			finalImage.release;
 			CFRelease(imageRef);
 		end;
 end;
 
-procedure MTLMakeContextCurrent(context: TMetalContext);
+procedure MTLMakeContextCurrent (context: TMetalContext);
 begin
 	CurrentThreadContext := context;
 end;
 
-function MTLCreateContext(view: MTKView): TMetalContext;
+function MTLCreateContext (view: MTKView): TMetalContext;
 var
 	context: TMetalContext;
 begin
@@ -829,7 +954,7 @@ begin
 
 	Fatal(context.device = nil, 'no gpu device found.');
 	Show(context.device, 'GPU:');
-	
+
 	context.commandQueue := context.device.newCommandQueue;
 
 	// set default pixel formats
@@ -839,27 +964,17 @@ begin
 	result := context;
 end;
 
-function MTLCreateLibrary(options: TMetalLibraryOptions): TMetalLibrary;
+function MTLCreateLibrary (options: TMetalLibraryOptions): TMetalLibrary;
 
-	function CompileShader(device: MTLDeviceProtocol; name: string): MTLLibraryProtocol;
+	function CompileShader (device: MTLDeviceProtocol; name: string): MTLLibraryProtocol;
 	var
 		source: NSString;
 		error: NSError;
-		compileOptions: MTLCompileOptions;
 	begin
 		source := NSString.stringWithContentsOfFile_encoding_error(NSSTR(name), NSUTF8StringEncoding, @error);
 		Fatal(source = nil, 'error loading library file', error);
 
-		compileOptions := MTLCompileOptions.alloc.init.autorelease;
-		compileOptions.setPreprocessorMacros(options.preprocessorMacros);
-		compileOptions.setFastMathEnabled(options.fastMathEnabled);
-		// if the there is language version specified use this
-		// otherwise if no version is given MTLCompileOptions will
-		// use the latest version available
-		if options.languageVersion > 0 then 
-			compileOptions.setLanguageVersion(compileOptions.languageVersion);
-
-		result := device.newLibraryWithSource_options_error(source, compileOptions, @error);
+		result := device.newLibraryWithSource_options_error(source, nil, @error);
 		Fatal(result = nil, 'error compiling library: ', error);
 	end;
 
@@ -885,12 +1000,12 @@ begin
 		Fatal('invalid library name');
 
 	Fatal(metalLibrary.lib = nil, 'no metal shaders could be loaded.', error);
-	Show(metalLibrary.lib);
+	//Show(metalLibrary.lib);
 
 	result := metalLibrary;
 end;
 
-function MTLCreatePipeline(options: TMetalPipelineOptions): TMetalPipeline;
+function MTLCreatePipeline (options: TMetalPipelineOptions): TMetalPipeline;
 var
 	vertexFunction: MTLFunctionProtocol = nil;
 	fragmentFunction: MTLFunctionProtocol = nil;
@@ -945,8 +1060,10 @@ begin
 						begin
 							pipelineDescriptor := MTLRenderPipelineDescriptor.alloc.init.autorelease;
 							pipelineDescriptor.setDepthAttachmentPixelFormat(view.depthStencilPixelFormat);
-							pipelineDescriptor.setVertexDescriptor(options.vertexDescriptor);
-							
+                            //pipelineDescriptor.setDepthAttachmentPixelFormat();
+							//pipelineDescriptor.depthAttachment.storeAction = MTLStoreActionStore;
+                            pipelineDescriptor.setVertexDescriptor(options.vertexDescriptor);
+
 							// default color attachment
 							pipelineDescriptor.colorAttachmentAtIndex(0).setPixelFormat(view.colorPixelFormat);
 						end;
@@ -964,5 +1081,5 @@ begin
 	result := pipeline;
 end;
 
-
 end.
+

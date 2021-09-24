@@ -67,10 +67,14 @@ end;
 procedure TForm1.SetupMetal(Sender: TObject);
 var
   options: TMetalPipelineOptions;
+  fnm: string;
 begin
   options := TMetalPipelineOptions.Default;
-  options.shaderName := ResourcePath('Color', 'metal');
-  pipeline := MTLCreatePipeline(MetalControl1, @options);
+  fnm :=  ResourceFolderPath() + '/Color.metal';
+  writeln('Attempting to load ' + fnm);
+  options.libraryName := fnm;
+
+  pipeline := MTLCreatePipeline(options);
 end;
 
 procedure TForm1.Draw(Sender: TObject);
@@ -105,7 +109,7 @@ begin
     colorAttachment.setClearColor(clearColor);
     }
 
-    MTLSetClearColor(0.7, 0.7, 0.9, 1);
+    MTLSetClearColor(MTLClearColorMake(0.7, 0.7, 0.9, 1));
 
     MTLSetViewport(MetalControl1.viewport);
     MTLSetVertexBytes(@verticies, sizeof(verticies), AAPLVertexInputIndexVertices);
