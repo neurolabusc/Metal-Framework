@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CONFIG>
-  <Compiler Value="/usr/local/bin/fpc" Date="1628604853"/>
-  <Params Value=" -Px86_64 -MObjFPC -Scghi -O1 -gw -gl -l -vewnhibq -Fu/Users/chrisrorden/src/Metal-Framework/lazarus/package/framework -Fu/Users/chrisrorden/src/Metal-Framework/lazarus/package/utils -Fu/Users/chrisrorden/src/lazarus/packager/units/x86_64-darwin -Fu/Users/chrisrorden/src/lazarus/components/lazutils/lib/x86_64-darwin -Fu/Users/chrisrorden/src/lazarus/components/freetype/lib/x86_64-darwin -Fu/Users/chrisrorden/src/lazarus/lcl/units/x86_64-darwin -Fu/Users/chrisrorden/src/lazarus/lcl/units/x86_64-darwin/cocoa -Fu/Users/chrisrorden/src/Metal-Framework/lazarus/package/ -FU/Users/chrisrorden/src/Metal-Framework/lazarus/package/lib/x86_64-darwin/ -dLCL -dLCLcocoa lazmetalcontrol.pas"/>
-</CONFIG>
