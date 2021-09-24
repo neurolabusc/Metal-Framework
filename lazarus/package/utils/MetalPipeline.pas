@@ -5,7 +5,7 @@
 unit MetalPipeline;
 interface
 uses
-	MetalUtils, Metal, MetalKit, CocoaAll, SysUtils,
+	Math, MetalUtils, Metal, MetalKit, CocoaAll, SysUtils,
         {$DEFINE COCOA_1010}
 	{$ifndef COCOA_1010}
 	// pre-10.10 FPC RTL CocoaAll.pas doesn't use MacOSAll types!
@@ -125,7 +125,7 @@ function MTLReadPixel(x, y: integer): UInt32; overload;
 
 //function MTLReadDepth(texture: MTLTextureProtocol; x, y: integer): single; overload;
 function MTLReadDepth(x, y: integer): single; overload;
-
+function MTLReadDepthBuffer(): boolean;
 procedure MTLWriteTextureToFile(texture: MTLTextureProtocol; path: pchar; hasAlpha: boolean = true; fileType: NSBitmapImageFileType = NSPNGFileType; imageProps: NSDictionary = nil); overload;
 procedure MTLWriteTextureToFile(path: pchar; hasAlpha: boolean = true; fileType: NSBitmapImageFileType = NSPNGFileType; imageProps: NSDictionary = nil); overload;
 procedure MTLWriteTextureToClipboard(texture: MTLTextureProtocol = nil; hasAlpha: boolean = true); overload;
@@ -844,51 +844,129 @@ begin
 
 end;
 
-function MTLReadDepth(x, y: integer): single; overload;
+function MTLReadDepthBuffer(): boolean;
+// https://metashapes.com/blog/reading-depth-buffer-metal-api/
 var
+  renderPass: MTLRenderPassDescriptor;
   blitEncoder: MTLBlitCommandEncoderProtocol;
-  tex: MTLTextureProtocol;
-  texDescriptor: MTLTextureDescriptor;
-  w, h: integer;
+  myCommandBuffer: MTLCommandBufferProtocol;
+  myRenderEncoder: MTLRenderCommandEncoderProtocol;
+  depthBufferDescriptor, colorBufferDescriptor: MTLTextureDescriptor;
+  w,h,i : integer;
+  mn,mx: single;
+  colorAttachment: MTLRenderPassColorAttachmentDescriptor;
+  texture, dtexture: MTLTextureProtocol;
+  depthImageBuffer: MTLBufferProtocol;
+  depthValues: array of single;
 begin
-  // https://metashapes.com/blog/reading-depth-buffer-metal-api/
+  writeln('MTLReadDepthBuffer called');
   Fatal(CurrentThreadContext = nil, kError_InvalidContext);
-  //Fatal(texture.pixelFormat <> MTLPixelFormatDepth32Float, 'depth texture must be MTLPixelFormatDepth32Float pixel format:'+inttostr(texture.pixelFormat));
   with CurrentThreadContext do begin
-    if (view.depthStencilPixelFormat <> MTLPixelFormatDepth32Float) then
-        exit(123);
-    texDescriptor := MTLTextureDescriptor.alloc.init.autorelease;
-	texDescriptor.setTextureType(MTLTextureType2D);
-	texDescriptor.setPixelFormat(MTLPixelFormatDepth32Float);
+    if (view.depthStencilPixelFormat <> MTLPixelFormatDepth32Float) then begin
+        writeln('requires Float32 depth buffer');
+        exit(false);
+    end;
+    renderPass := view.currentRenderPassDescriptor;
+    if renderPass = nil then begin
+        writeln('no active RenderPassDescriptor');
+        exit(false);
+    end;
     w :=  view.currentDrawable.texture.width;
     h := view.currentDrawable.texture.height;
-	texDescriptor.setWidth(w);
-	texDescriptor.setHeight(h);
-	texDescriptor.setUsage(MTLTextureUsageShaderRead);
-    tex:= device.newTextureWithDescriptor(texDescriptor);
-    view.currentRenderPassDescriptor.depthAttachment.setStoreAction(MTLStoreActionStore);
-    view.currentRenderPassDescriptor.depthAttachment.setLoadAction(MTLLoadActionClear);
-    //renderPass.depthAttachment.texture
-    //view.currentRenderPassDescriptor.depthAttachment.setTexture(tex);
-    commandBuffer := commandQueue.commandBuffer;
+    if (w < 1) or (h < 1) then begin
+        writeln('width or height do not make sense');
+        exit(false);
+    end;
+    writeln('w*h ',w, ' ', h);
+    // Create the color buffer
+    (*colorBufferDescriptor := MTLTextureDescriptor.alloc.init.autorelease;
+    colorBufferDescriptor.setTextureType(MTLTextureType2D);
+    colorBufferDescriptor.setPixelFormat(MTLPixelFormatBGRA8Unorm);
+    colorBufferDescriptor.setWidth(w);
+    colorBufferDescriptor.setHeight(h);
+    colorBufferDescriptor.setDepth(1);*)
+    colorBufferDescriptor := MTLTextureDescriptor.texture2DDescriptorWithPixelFormat_width_height_mipmapped (MTLPixelFormatBGRA8Unorm, w, h, false);
+    //colorBufferDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:imageSize.getWidth() height:imageSize.getHeight() mipmapped:NO];
+    texture := view.device.newTextureWithDescriptor(colorBufferDescriptor);
+    colorAttachment := renderPass.colorAttachmentAtIndex(0);
+    colorAttachment.setTexture(texture);
+    // renderPass.colorAttachments[0].texture = [self.mtlDevice newTextureWithDescriptor:colorBufferDescriptor];
+    colorAttachment.setClearColor(MTLClearColorMake(0.0, 0.0, 0.0, 0.0));
+    // renderPass.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
+    colorAttachment.setLoadAction(MTLLoadActionClear);
+    // renderPass.colorAttachments[0].loadAction = MTLLoadActionClear;
+    //Create the depth buffer            
+    depthBufferDescriptor := MTLTextureDescriptor.texture2DDescriptorWithPixelFormat_width_height_mipmapped (MTLPixelFormatDepth32Float_Stencil8, w, h, false);
+    // MTLTextureDescriptor * depthBufferDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float_Stencil8 width:imageSize.getWidth() height:imageSize.getHeight() mipmapped:NO];
+    depthBufferDescriptor.setUsage(MTLTextureUsageRenderTarget or MTLTextureUsageShaderRead);
+    //depthBufferDescriptor.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead
+    dtexture := view.device.newTextureWithDescriptor(depthBufferDescriptor);
+    renderPass.depthAttachment.setTexture(dtexture);
+    //renderPass.depthAttachment.texture = [self.mtlDevice newTextureWithDescriptor:depthBufferDescriptor];
+    renderPass.depthAttachment.setLoadAction(MTLLoadActionClear);
+    //renderPass.depthAttachment.loadAction = MTLLoadActionClear;
+    renderPass.depthAttachment.setStoreAction(MTLStoreActionStore);
+    //renderPass.depthAttachment.storeAction = MTLStoreActionStore;
+    renderPass.stencilAttachment.setTexture(renderPass.depthAttachment.texture);
+    //renderPass.stencilAttachment.texture = renderPass.depthAttachment.texture;
+    // We create a new command buffer for this render-to-texture frame.
+    writeln('command buffer');
+    myCommandBuffer := commandBuffer;
+    //id<MTLCommandBuffer> commandBuffer = [self.mtlCommandQueue commandBuffer];
+    //renderEncoder := CurrentThreadContext.renderEncoder;
+    
+    //>>>>>FAILURE
+    myRenderEncoder := myCommandBuffer.renderCommandEncoderWithDescriptor(renderPass);
+    //id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPass]
+    // [...] the actual rendering is done here
+    
+    //>>>>FAILURE 
+    renderEncoder.endEncoding;
+    //renderEncoder := nil;
+    //[renderEncoder endEncoding];
+    
+    // Now add a blit to the CPU-accessible buffer
+    //opts:= MTLResourceOptionCPUCacheModeDefault;
+    depthImageBuffer := CurrentThreadContext.device.newBufferWithLength_options(4 * w * h, MTLResourceOptionCPUCacheModeDefault);
+    //id<MTLBuffer> depthImageBuffer = [_self.mtlDevice newBufferWithLength:(4 * pixelCount) options:MTLResourceOptionCPUCacheModeDefault];
+    writeln('blit encode');
     blitEncoder := commandBuffer.blitCommandEncoder;
-    view.draw;
-    blitEncoder.synchronizeResource(tex);
-    blitEncoder.endEncoding;
+    //id<MTLBlitCommandEncoder> blitCommandEncoder = commandBuffer.blitCommandEncoder;
+    //blitEncoder.copyFromTexture(view.currentRenderPassDescriptor.depthAttachment.texture, 0, 0, MTLOriginMake(0, 0, 0), MTLSizeMake(w, h, 1), dtexture, 0, 0, MTLOriginMake(0, 0, 0));
+    
+    blitEncoder.copyFromTexture(view.currentRenderPassDescriptor.depthAttachment.texture, 0, 0, MTLOriginMake(0, 0, 0), MTLSizeMake(w, h, 1), depthImageBuffer, 0, 4 * w, 4 * w * h, MTLBlitOptionDepthFromDepthStencil);
+    
+    //[blitCommandEncoder copyFromTexture:renderPass.depthAttachment.texture sourceSlice:0; sourceLevel:0; sourceOrigin:MTLOriginMake(0, 0, 0) sourceSize:MTLSizeMake(imageSize.getWidth(), imageSize.getHeigth, 1)
+     blitEncoder.endEncoding;
+    //[blitCommandEncoder endEncoding];
+    // Commit and wait for completion of rendering
+    commandBuffer.commit;
+    //[commandBuffer commit];
     commandBuffer.waitUntilCompleted;
-    //again...
-    commandBuffer := commandQueue.commandBuffer;
-    blitEncoder := commandBuffer.blitCommandEncoder;
-    view.draw;
-    //blitEncoder.copyFromTexture(view.currentRenderPassDescriptor.depthAttachment.texture, 0, 0, MTLOriginMake(0, 0, 0), MTLSizeMake(w, h, 1), tex, 0, 0, MTLOriginMake(0, 0, 0));
+    writeln('copy values');
+    //[commandBuffer waitUntilCompleted];
+    setlength(depthValues, w * h);
+    texture.getBytes_bytesPerRow_fromRegion_mipmapLevel(@depthValues, w * 4, MTLRegionMake2D(0, 0, w, h), 0);
+    //float * depthValues = (float*)[depthImageBuffer contents];
+    mn := depthValues[0];
+    mx := mn;
+    for i := 0 to ((w * h) - 1) do begin
+      mn := min(mn, depthValues[i]);
+      mx := max(mx, depthValues[i]);
+    end;
+    writeln('Depth value range ', mn, '...', mx);
 
-    blitEncoder.synchronizeResource(tex);
-    blitEncoder.endEncoding;
-    commandBuffer.waitUntilCompleted;
-    //read data
-    tex.getBytes_bytesPerRow_fromRegion_mipmapLevel(@result, w * 4 , MTLRegionMake2D(X, Y, 1, 1), 0);
+
 
   end;
+  writeln('Unmitigated success?');
+  exit(true);
+end;
+
+function MTLReadDepth(x, y: integer): single; overload;
+begin
+  // https://metashapes.com/blog/reading-depth-buffer-metal-api/
+  result := 0.0;
 end;
 
 (*function MTLReadDepth( x, y: integer): single;

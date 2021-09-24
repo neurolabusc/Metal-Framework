@@ -71,6 +71,8 @@ procedure TAppController.copyScreen (sender: id);
 begin
 	writeln('copying screen to clipboard');
 	MTLWriteTextureToClipboard(true);
+	writeln('attempting to compute screen depth');
+	MTLReadDepthBuffer();
 end;
 
 procedure TAppController.newDocument (sender: id);
